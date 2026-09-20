@@ -1,0 +1,68 @@
+{
+    "name": "@halocache/halo-mcc-api",
+    "version": "1.0.0",
+    "description": "A Node.js client for Halo: The Master Chief Collection APIs. - fileshare, custom game browser, player profiles, stats, and Xbox media.",
+    "main": "src/index.js",
+    "types": "types/index.d.ts",
+    "type": "module",
+    "files": [
+        "src/",
+        "types/",
+        "README.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "test": "node --test \"tests/unit/**/*.test.js\" && npm run test:types",
+        "build:types": "node ../../scripts/dev/buildGeneratedPackageTypes.js",
+        "test:types": "npm run build:types && tsc --noEmit --strict --module NodeNext --moduleResolution NodeNext --target ES2022 --lib ES2022,DOM --types node types/index.d.ts",
+        "test:coverage": "c8 node --test \"tests/unit/**/*.test.js\"",
+        "test:integration": "node --test \"tests/integration/**/*.test.js\""
+    },
+    "keywords": [
+        "halo",
+        "mcc",
+        "master-chief-collection",
+        "api",
+        "game",
+        "xbox",
+        "fileshare",
+        "custom-games",
+        "playfab"
+    ],
+    "author": {
+        "name": "Pix3lPirat3",
+        "url": "https://github.com/Pix3lPirat3"
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/HaloCache/halo-mcc-api.git",
+        "directory": "packages/halo-mcc-api"
+    },
+    "homepage": "https://github.com/HaloCache/halo-mcc-api/tree/main/packages/halo-mcc-api#readme",
+    "bugs": {
+        "url": "https://github.com/HaloCache/halo-mcc-api/issues"
+    },
+    "engines": {
+        "node": ">=22.19.0"
+    },
+    "dependencies": {
+        "@halocache/halo-mcc-auth": "^1.0.0",
+        "@halocache/halo-mcc-common": "^1.0.0",
+        "@halocache/halo-mcc-data": "^1.0.0",
+        "pako": "^3.0.2"
+    },
+    "devDependencies": {
+        "@types/node": "24.13.5",
+        "c8": "^12.0.0",
+        "dotenv": "^17.2.3",
+        "typescript": "7.0.2"
+    },
+    "sideEffects": false,
+    "exports": {
+        ".": {
+            "types": "./types/index.d.ts",
+            "default": "./src/index.js"
+        }
+    }
+}
