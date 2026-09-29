@@ -22,6 +22,9 @@ export type FileShareItem = {
      * - Always "ugc"
      */
     Type: string;
+    /**
+     * - Item type
+     */
     ContentType: "MapVariant" | "GameVariant";
     /**
      * - Localized title
