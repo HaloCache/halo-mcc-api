@@ -119,7 +119,7 @@ export declare class FileShareService {
      * Resolve a gamertag to its Title Player ID and fetch FileShare content.
      *
      * @param {string} gamertag - Xbox Gamertag
-     * @returns {Promise<{items: FileShareItem[], maps: FileShareItem[], gameVariants: FileShareItem[], player: Object}|null>}
+     * @returns {Promise<{items: FileShareItem[], maps: FileShareItem[], gameVariants: FileShareItem[], player: Object, completeness: 'complete', count: number}|null>}
      *          Player's content or null if gamertag not found
      */
     getItemsByGamertag(gamertag: string): Promise<{
@@ -127,18 +127,22 @@ export declare class FileShareService {
         maps: FileShareItem[];
         gameVariants: FileShareItem[];
         player: Object;
+        completeness: 'complete';
+        count: number;
     } | null>;
     /**
      * Resolve an XUID through PlayFab and fetch the player's FileShare items.
      *
      * @param {string} xuid - Xbox User ID
-     * @returns {Promise<{items: FileShareItem[], maps: FileShareItem[], gameVariants: FileShareItem[], player: Object}|null>}
+     * @returns {Promise<{items: FileShareItem[], maps: FileShareItem[], gameVariants: FileShareItem[], player: Object, completeness: 'complete', count: number}|null>}
      */
     getItemsByXuid(xuid: string): Promise<{
         items: FileShareItem[];
         maps: FileShareItem[];
         gameVariants: FileShareItem[];
         player: Object;
+        completeness: 'complete';
+        count: number;
     } | null>;
     /**
      * Batch fetch FileShare content for multiple players.
