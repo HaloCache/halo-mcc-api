@@ -76,6 +76,13 @@ fileshare.getItemDetails(itemId)           // Item download URL
 fileshare.downloadItem(itemId, path)       // Download file
 ```
 
+Player-list responses require HTTP 200, an explicit `Items` array, a matching
+nonnegative integer `Count`, valid item identifiers/types, and no reported
+continuation. Missing or partial data throws `MCC_FILESHARE_UNVERIFIED`; it is not
+converted into an empty fileshare. Resolved XUID/gamertag results include
+`completeness: 'complete'` and `count`. An unresolved player still returns `null`,
+which must not authorize deletion of previously observed ownership.
+
 ### XboxMediaService
 
 Screenshots and Game Clips from Xbox Game DVR (separate from PlayFab UGC).
