@@ -11,7 +11,7 @@ import { ENDPOINTS, DEFAULT_HEADERS } from '../constants.js';
 import { enrichResponse } from '../utils/response-enrichment.js';
 import { mapWithConcurrency } from '../utils/concurrency.js';
 import { ValidationError } from '../validation.js';
-import { RateLimitError } from '../errors.js';
+import { MccApiError, RateLimitError } from '../errors.js';
 import { isValidGuid } from '@halocache/halo-mcc-common';
 
 /** @typedef {import('../types/fileshare.types.js').FileShareItemDetails} FileShareItemDetails */
@@ -19,6 +19,26 @@ import { isValidGuid } from '@halocache/halo-mcc-common';
 /** @typedef {import('../utils/response-enrichment.js').EnrichedResponse} EnrichedResponse */
 
 import { FileShareItem } from '../models/fileshare.model.js';
+
+function validatedPlayerItems(response) {
+    const envelope = response?.data;
+    const body = envelope?.data ?? envelope;
+    const reject = reason => {
+        throw new MccApiError('Fileshare response is not a verified complete item list', {
+            code: 'MCC_FILESHARE_UNVERIFIED', statusCode: response?.status,
+            context: { endpoint: 'GetPlayFabUgcItems', reason },
+        });
+    };
+    if (response?.status !== 200 || !body || typeof body !== 'object' || Array.isArray(body)
+        || envelope.Error != null || envelope.error != null || body.Error != null || body.error != null
+        || (envelope.code !== undefined && envelope.code !== 200)) reject('response-envelope');
+    if (!Array.isArray(body.Items)) reject('missing-items');
+    if (!Number.isSafeInteger(body.Count) || body.Count < 0 || body.Count !== body.Items.length) reject('item-count');
+    if (body.ContinuationToken || body.continuationToken || body.HasMore || body.hasMore) reject('incomplete-page');
+    if (body.Items.some(item => !item || typeof item !== 'object' || Array.isArray(item)
+        || !isValidGuid(item.Id) || typeof item.ContentType !== 'string' || !item.ContentType)) reject('invalid-item');
+    return { ...response, data: { ...body, Items: FileShareItem.fromArray(body.Items) } };
+}
 
 /**
  * Supported FileShare content types.
@@ -76,14 +96,7 @@ export class FileShareService {
                         'CreatorEntityId': creatorEntityId
                     }
                 }
-            ).then(res => {
-                if (res.data?.data && Array.isArray(res.data.data.Items)) {
-                    res.data.data.Items = FileShareItem.fromArray(res.data.data.Items);
-                } else if (res.data && Array.isArray(res.data.Items)) {
-                    res.data.Items = FileShareItem.fromArray(res.data.Items);
-                }
-                return res;
-            }),
+            ).then(validatedPlayerItems),
             {
                 endpoint: 'GetPlayFabUgcItems',
                 method: 'POST',
@@ -100,7 +113,7 @@ export class FileShareService {
      */
     async getPlayerScreenshots(creatorEntityId) {
         const result = await this.getPlayerItems(creatorEntityId);
-        const items = result.data.Items || [];
+        const items = result.data.Items;
         return items.filter(item => item.contentType === 'Screenshot');
     }
 
@@ -112,7 +125,7 @@ export class FileShareService {
      */
     async getPlayerMaps(creatorEntityId) {
         const result = await this.getPlayerItems(creatorEntityId);
-        const items = result.data.Items || [];
+        const items = result.data.Items;
         return items.filter(item => item.isMapVariant);
     }
 
@@ -124,7 +137,7 @@ export class FileShareService {
      */
     async getPlayerGameVariants(creatorEntityId) {
         const result = await this.getPlayerItems(creatorEntityId);
-        const items = result.data.Items || [];
+        const items = result.data.Items;
         return items.filter(item => item.isGameVariant);
     }
 
@@ -136,7 +149,7 @@ export class FileShareService {
      */
     async getPlayerFilms(creatorEntityId) {
         const result = await this.getPlayerItems(creatorEntityId);
-        const items = result.data.Items || [];
+        const items = result.data.Items;
         return items.filter(item => item.contentType === 'Film');
     }
 
@@ -243,7 +256,7 @@ export class FileShareService {
         const details = await this.getItemDetails(itemId);
 
         if (!details?.DownloadUrl) {
-            throw new Error(`No download URL available for item ${itemId}`);
+            throw new MccApiError(`No download URL available for item ${itemId}`, { code: 'MCC_ITEM_METADATA_ONLY' });
         }
 
         const response = await this.client.http.get(details.DownloadUrl, {
@@ -297,7 +310,7 @@ export class FileShareService {
      * Resolve a gamertag to its Title Player ID and fetch FileShare content.
      *
      * @param {string} gamertag - Xbox Gamertag
-     * @returns {Promise<{items: FileShareItem[], maps: FileShareItem[], gameVariants: FileShareItem[], player: Object}|null>}
+     * @returns {Promise<{items: FileShareItem[], maps: FileShareItem[], gameVariants: FileShareItem[], player: Object, completeness: 'complete', count: number}|null>}
      *          Player's content or null if gamertag not found
      */
     async getItemsByGamertag(gamertag) {
@@ -310,9 +323,10 @@ export class FileShareService {
         }
 
         const itemsResult = await this.getPlayerItems(player.titlePlayerId);
-        const items = itemsResult.data?.Items || [];
+        const items = itemsResult.data.Items;
 
         return {
+            completeness: 'complete', count: itemsResult.data.Count,
             items,
             maps: items.filter(item => item.isMapVariant),
             gameVariants: items.filter(item => item.isGameVariant),
@@ -324,7 +338,7 @@ export class FileShareService {
      * Resolve an XUID through PlayFab and fetch the player's FileShare items.
      *
      * @param {string} xuid - Xbox User ID
-     * @returns {Promise<{items: FileShareItem[], maps: FileShareItem[], gameVariants: FileShareItem[], player: Object}|null>}
+     * @returns {Promise<{items: FileShareItem[], maps: FileShareItem[], gameVariants: FileShareItem[], player: Object, completeness: 'complete', count: number}|null>}
      */
     async getItemsByXuid(xuid) {
         const { PlayerService } = await import('./player.service.js');
@@ -337,9 +351,10 @@ export class FileShareService {
         if (!titlePlayerId) return null;
 
         const itemsResult = await this.getPlayerItems(titlePlayerId);
-        const items = itemsResult.data?.Items || [];
+        const items = itemsResult.data.Items;
 
         return {
+            completeness: 'complete', count: itemsResult.data.Count,
             items,
             maps: items.filter(item => item.isMapVariant),
             gameVariants: items.filter(item => item.isGameVariant),
@@ -363,7 +378,7 @@ export class FileShareService {
         await mapWithConcurrency(titlePlayerIds, options.concurrency ?? 5, async (titlePlayerId) => {
             try {
                 const itemsResult = await this.getPlayerItems(titlePlayerId);
-                const items = itemsResult.data?.Items || [];
+                const items = itemsResult.data.Items;
 
                 results.set(titlePlayerId, {
                     items,
