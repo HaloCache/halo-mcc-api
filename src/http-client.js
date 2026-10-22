@@ -17,6 +17,12 @@ export class HttpClientError extends Error {
     }
 }
 
+class ResponseBodyTransportError extends Error {
+    constructor(cause) {
+        super('Response body transport failed', { cause });
+    }
+}
+
 function appendParams(url, params) {
     if (!params || typeof params !== 'object') return url;
     const parsed = new URL(url);
@@ -59,7 +65,12 @@ async function readResponseData(response, responseType) {
         return response.body ? Readable.fromWeb(response.body) : Readable.from([]);
     }
 
-    const bytes = Buffer.from(await response.arrayBuffer());
+    let bytes;
+    try {
+        bytes = Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+        throw new ResponseBodyTransportError(error);
+    }
     if (responseType === 'arraybuffer') return bytes;
     if (bytes.length === 0) return '';
 
@@ -78,6 +89,20 @@ function transportCode(error, timedOut, externallyAborted) {
     if (timedOut) return 'ECONNABORTED';
     if (externallyAborted) return 'ERR_CANCELED';
     return error?.code || error?.cause?.code || 'NETWORK_ERROR';
+}
+
+function normalizedTransportError(error, { timeoutSignal, externalSignal, requestTimeout, config, response = null }) {
+    const externallyAborted = Boolean(externalSignal?.aborted);
+    const timedOut = timeoutSignal.aborted && !externallyAborted;
+    return new HttpClientError(
+        timedOut ? `timeout of ${requestTimeout}ms exceeded` : error.message,
+        {
+            code: transportCode(error, timedOut, externallyAborted),
+            cause: error,
+            config,
+            response
+        }
+    );
 }
 
 export function createNodeHttpClient({ fetchImpl = globalThis.fetch, timeout = DEFAULT_TIMEOUT_MS } = {}) {
@@ -113,25 +138,25 @@ export function createNodeHttpClient({ fetchImpl = globalThis.fetch, timeout = D
                 ...(body instanceof Readable ? { duplex: 'half' } : {})
             });
         } catch (error) {
-            const timedOut = timeoutSignal.aborted && !config.signal?.aborted;
-            throw new HttpClientError(
-                timedOut ? `timeout of ${requestTimeout}ms exceeded` : error.message,
-                {
-                    code: transportCode(error, timedOut, config.signal?.aborted),
-                    cause: error,
-                    config: normalizedConfig
-                }
-            );
+            throw normalizedTransportError(error, { timeoutSignal, externalSignal: config.signal,
+                requestTimeout, config: normalizedConfig });
         }
 
         const response = {
-            data: await readResponseData(raw, config.responseType),
+            data: null,
             status: raw.status,
             statusText: raw.statusText,
             headers: plainHeaders(raw.headers),
             config: normalizedConfig,
             request: null
         };
+        try {
+            response.data = await readResponseData(raw, config.responseType);
+        } catch (error) {
+            if (!(error instanceof ResponseBodyTransportError)) throw error;
+            throw normalizedTransportError(error.cause, { timeoutSignal, externalSignal: config.signal,
+                requestTimeout, config: normalizedConfig, response });
+        }
         const validateStatus = config.validateStatus || (status => status >= 200 && status < 300);
         if (!validateStatus(response.status)) {
             throw new HttpClientError(`Request failed with status code ${response.status}`, {
