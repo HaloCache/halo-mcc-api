@@ -143,7 +143,9 @@ export function createNodeHttpClient({ fetchImpl = globalThis.fetch, timeout = D
         }
 
         const response = {
-            data: null,
+            // Cast: the declaration emitter would otherwise publish `data: null`
+            // from this initializer, which the next statement overwrites.
+            data: /** @type {any} */ (null),
             status: raw.status,
             statusText: raw.statusText,
             headers: plainHeaders(raw.headers),

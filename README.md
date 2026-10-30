@@ -132,6 +132,50 @@ stats.getStore(storeId)                    // Store items
 stats.getAvailableStores()                 // Store IDs
 ```
 
+### LeaderboardService
+
+Campaign and playlist leaderboards on `leaderboards.xboxlive.com`. Board names
+are composed from a spec; the catalog of addressable boards is in
+`@halocache/halo-mcc-data` (`enumerateLeaderboards`).
+
+```javascript
+const leaderboards = new LeaderboardService(client);
+const board = { kind: 'mission', metric: 'scoring', difficultyId: 0, mapId: 179, coop: 0 };
+
+for await (const row of leaderboards.rows({ board, maxItems: 100 })) { /* ... */ }
+for await (const page of leaderboards.pages({ board, maxItems: 100 })) { /* ... */ }
+const top = await leaderboards.collect({ board, maxItems: 100 }, { maxPages: 1 });
+```
+
+Rows are `{ rank, globalRank, xuid, gamertag, percentile, value, valueMetadata, raw }`.
+The iterators walk continuation tokens; a board tops out at the service's
+10000-entry window. 429 and 5xx retry with backoff honouring `retry-after`.
+
+### SocialService / PresenceService
+
+```javascript
+const social = new SocialService(client);
+await social.getPeople()                   // friends list
+await social.getRivals()                   // the favorites subset (MCC's rival)
+await social.getPerson(xuid)               // null when not in the list
+
+const presence = new PresenceService(client);
+await presence.getPresence(xuid)           // state, lastSeen, devices
+await presence.getPresenceBatch(xuids)     // batch form
+```
+
+`getRivals` filters the favorites subset: rival is an MCC concept over the Xbox
+favorites list, not a separate online object.
+
+### UserStatsService / PlayFabExtrasService / ModerationService
+
+Xbox title stats (`userstats.xboxlive.com`, with `buildMissionStatName` /
+`buildPlaylistStatName`), the extra PlayFab and MCC progression calls, and the
+moderation surface. Mutating calls in the last two require `confirm: true`.
+
+See `docs/ONLINE_SERVICES.md` for the endpoint/token map and
+`docs/LEADERBOARDS.md` for board coverage.
+
 ## API Rate Limits (Verified)
 
 Empirical limits discovered through stress testing (Dec 2025). These limits are enforced by the upstream APIs (Xbox Live / PlayFab).
@@ -248,7 +292,9 @@ Current: `2025.08.16.178512.1-Release`
 
 ## Documentation
 
-See `docs/API_CONTRACTS.md` for detailed API schemas.
+See `docs/API_CONTRACTS.md` for detailed API schemas,
+`docs/ONLINE_SERVICES.md` for the Xbox Live / MCC online service map and
+`docs/LEADERBOARDS.md` for leaderboard board coverage.
 
 ## Testing
 
